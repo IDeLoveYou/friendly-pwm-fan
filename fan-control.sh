@@ -1,6 +1,7 @@
 #!/bin/bash
 
-# 定义保存默认数据的文件路径
+# 定义保存默认功耗墙文件位置，存储该值防止用户随意设置风扇开启摄氏度高于厂商的功耗墙，造成设备损坏
+# 例如thermal_zone0 3 55000，表示最小功耗配置为/sys/class/thermal/{thermal_zone0}/trip_point_{3}_temp，以及所有设备的厂商功耗墙中最小的值为{55000}（55摄氏度）
 SAVE="/tmp/fan-default/fan-default"
 
 # 获取脚本执行时传入的第一个参数，用于确定要执行的操作（"get"、"set" 或 "temp"）
@@ -12,7 +13,7 @@ shift
 # Function to get the thermal zone with minimum and maximum trip points
 # 获取具有最低和最高温度trip点的热区域函数
 getFanTP() {
-    local zone cdev trip temp mintemp mintrip minzone maxtemp
+    local zone cdev trip temp mintemp mintrip minzone
 
     # 检查是否存在thermal目录，否则返回错误
     [[ -d /sys/class/thermal ]] || return 1
@@ -51,11 +52,6 @@ getFanTP() {
                 mintrip=$trip
                 minzone=$zone
             fi
-
-            # 更新最大温度
-            if [[ -z "$maxtemp" ]] || [[ "$temp" -gt "$maxtemp" ]]; then
-                maxtemp=$temp
-            fi
         done
 
         # 返回thermal目录
@@ -64,7 +60,7 @@ getFanTP() {
 
     # 如果找到了最小温度，则输出信息并返回成功
     if [[ -n "$mintemp" ]]; then
-        echo "$minzone" "$mintrip" "$mintemp" "$maxtemp"
+        echo "$minzone" "$mintrip" "$mintemp"
         return 0
     else
         # 否则返回错误
@@ -102,14 +98,15 @@ getFanTP_U() {
     OFF_TEMP="$((ON_TEMP - $(cat "/sys/class/thermal/${zone}/trip_point_${trip}_hyst")))"
 
     # 返回热区域、trip点、trip点温度和最高温度信息
-    echo "$zone" "$trip" "$((ON_TEMP / 1000))" "$((OFF_TEMP / 1000))"
+    echo "fan startup temperature：$((ON_TEMP / 1000)) degrees Celsius，fan shutdown temperature：$((OFF_TEMP / 1000)) degrees Celsius" >&2
+    echo "风扇启动温度：$((ON_TEMP / 1000))摄氏度，风扇关闭温度：$((OFF_TEMP / 1000))摄氏度" >&2
     return 0
 }
 
 # Function to set fan trip points
 # 设置风扇trip点函数
 setFanTP() {
-    local zone trip maxTemp ON_TEMP OFF_TEMP
+    local zone trip mintemp ON_TEMP OFF_TEMP
 
     # 接受两个参数：ON_TEMP 和可选的 OFF_TEMP
     ON_TEMP=$(($1 * 1000))
@@ -121,20 +118,22 @@ setFanTP() {
 
     # 检查参数的有效性，确保 ON_TEMP 大于 5000 并且大于 OFF_TEMP
     [[ -n "$ON_TEMP" && "$ON_TEMP" -gt 5000 && "$ON_TEMP" -gt "$OFF_TEMP" ]] || {
-        echo "Invalid input" >&2
+        echo "ERROR: Check the validity of the parameters to ensure that (fan startup temperature) is greater than (5 degrees Celsius) and greater than (fan shutdown temperature)" >&2
+        echo "错误: 检查参数的有效性，确保(风扇启动温度)大于(5摄氏度)并且大于(风扇关闭温度)" >&2
         return 1
     }
 
     # 从 getFanTP_C 函数获取当前风扇trip点设置，并提取信息
-    read -r zone trip _ maxTemp < <(getFanTP_C) || return 1
+    read -r zone trip mintemp < <(getFanTP_C) || return 1
 
     # 检查 zone、trip 存在并且对应的热区域目录存在，否则返回1表示失败
     [[ -n "$zone" && -n "$trip" && -d "/sys/class/thermal/${zone}" ]] || return 1
 
-    # 如果 maxTemp 存在且 ON_TEMP 大于等于 maxTemp，修正 ON_TEMP 为 maxTemp 减去 5000，并在标准错误输出上发出警告
-    if [[ -n "$maxTemp" && "$ON_TEMP" -ge "$maxTemp" ]]; then
-        ON_TEMP=$((maxTemp - 5000))
-        echo "WARN: ON_TEMP is greater than next TP $maxTemp, fixed to $ON_TEMP" >&2
+    # 如果 mintemp 存在且 ON_TEMP 大于等于 mintemp，修正 ON_TEMP 为 mintemp，并在标准错误输出上发出警告
+    if [[ -n "$mintemp" && "$ON_TEMP" -ge "$mintemp" ]]; then
+        ON_TEMP="$mintemp"
+        echo "WARN: (Fan starting temperature) cannot be higher than the minimum power consumption wall ($((mintemp / 1000)) degrees Celsius), has been automatically set (fan starting temperature) to ($((mintemp / 1000)) degrees Celsius)" >&2
+        echo "警告: (风扇启动温度)不能高于最低功耗墙($((mintemp / 1000))摄氏度), 已自动将(风扇启动温度)设置为($((mintemp / 1000))摄氏度)" >&2
     fi
 
     # 将新的 ON_TEMP 写入 trip点温度文件，将温度差值写入 trip点温度差值文件
