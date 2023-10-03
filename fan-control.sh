@@ -99,7 +99,7 @@ getFanTP_U() {
     OFF_TEMP="$((ON_TEMP - $(cat "/sys/class/thermal/${zone}/trip_point_${trip}_hyst")))"
 
     # 返回热区域、trip点、trip点温度和最高温度信息
-    echo "fan startup temperature：$((ON_TEMP / 1000)) degrees Celsius，fan shutdown temperature：$((OFF_TEMP / 1000)) degrees Celsius" >&2
+    echo "Fan startup temperature：$((ON_TEMP / 1000)) degrees Celsius，fan shutdown temperature：$((OFF_TEMP / 1000)) degrees Celsius" >&2
     echo "风扇启动温度：$((ON_TEMP / 1000))摄氏度，风扇关闭温度：$((OFF_TEMP / 1000))摄氏度" >&2
     return 0
 }
@@ -145,18 +145,20 @@ setFanTP() {
 # Function to get current thermal temperature and fan on temp
 # 获取当前热温度和风扇trip点温度函数
 getTemp() {
-    local zone trip temp tpt
+    local zone temp
 
     # 从 getFanTP_C 函数获取当前风扇trip点设置，并提取信息
-    read -r zone trip _ < <(getFanTP_C) || return 1
+    read -r zone _ _ < <(getFanTP_C) || return 1
 
     # 检查 zone、trip 存在，并且温度文件存在，否则返回1表示失败
-    [[ -n "$zone" && -n "$trip" && -f "/sys/class/thermal/$zone/temp" ]] || return 1
+    [[ -n "$zone" && -f "/sys/class/thermal/$zone/temp" ]] || return 1
 
     # 获取当前热温度和风扇trip点温度，并返回这些信息
     temp=$(cat "/sys/class/thermal/$zone/temp")
-    tpt=$(cat "/sys/class/thermal/$zone/trip_point_${trip}_temp")
-    echo "$temp $tpt"
+
+    # 输出
+    echo "Current fan temperature：$((temp / 1000)) degrees Celsius" >&2
+    echo "当前风扇温度：$((temp / 1000))摄氏度" >&2
 }
 
 # Function to display usage information

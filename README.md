@@ -20,7 +20,7 @@
 #赋予执行权限
 chmod 777 fan-control.sh
 
-#获取当前设备温度和风扇开启温度阈值
+#获取当前设备温度
 fan-control.sh temp
 
 #设置温度配置文件
