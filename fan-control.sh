@@ -1,4 +1,5 @@
 #!/bin/bash
+# author: IDeLoveYou
 
 # 定义保存默认功耗墙文件位置，存储该值防止用户随意设置风扇开启摄氏度高于厂商的功耗墙，造成设备损坏
 # 例如thermal_zone0 3 55000，表示最小功耗配置为/sys/class/thermal/{thermal_zone0}/trip_point_{3}_temp，以及所有设备的厂商功耗墙中最小的值为{55000}（55摄氏度）
